@@ -1,3 +1,4 @@
+/* client/src/App.css */
 .App {
   text-align: center;
 }
@@ -140,6 +141,15 @@
   min-height: 2em;
 }
 
+/* Mejoras para los gráficos en dispositivos móviles */
+.recharts-wrapper {
+  margin: 0 auto;
+}
+
+.recharts-legend-item-text {
+  font-size: 12px;
+}
+
 /* Estilos para pantallas pequeñas */
 @media (max-width: 768px) {
   .header {
@@ -184,6 +194,30 @@
   .ant-form-item {
     margin-bottom: 16px;
   }
+
+  /* Mejoras para los gráficos en móvil */
+  .recharts-text {
+    font-size: 10px;
+  }
+
+  .recharts-cartesian-axis-tick {
+    font-size: 10px;
+  }
+
+  .recharts-tooltip-wrapper {
+    max-width: 80vw;
+  }
+
+  .recharts-default-legend {
+    font-size: 10px;
+    margin-bottom: 5px !important;
+  }
+
+  /* Mejorar visualización de radio buttons en móvil */
+  .ant-radio-button-wrapper {
+    padding: 0 8px;
+    font-size: 12px;
+  }
 }
 
 /* Estilos para pantallas muy pequeñas */
@@ -211,6 +245,12 @@
   .ant-picker {
     width: 100% !important;
   }
+
+  /* Reducir aún más el tamaño del texto en gráficos */
+  .recharts-text {
+    font-size: 8px;
+  }
+
 }
 
 /* Mejorar la visualización de eventos en dispositivos pequeños */
@@ -222,4 +262,20 @@
   .events li {
     margin-bottom: 2px;
   }
+  
+  /* Hacer que las etiquetas del gráfico sean más compactas */
+  .recharts-label {
+    font-size: 8px;
+  }
+  
+  .recharts-reference-line-label {
+    font-size: 8px;
+  }
+}
+
+/* Mejora del tooltip de gráficos para dispositivos táctiles */
+.recharts-tooltip-wrapper {
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 5px;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.15);
 }

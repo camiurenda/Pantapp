@@ -1,3 +1,4 @@
+// client/src/App.js
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
@@ -28,7 +29,8 @@ import {
   ExperimentOutlined,
   MedicineBoxOutlined,
   CoffeeOutlined,
-  LineChartOutlined
+  LineChartOutlined,
+  SyncOutlined
 } from '@ant-design/icons';
 import GlucoseChart from './components/glucoseChart';
 import es_ES from 'antd/lib/locale/es_ES';
@@ -55,19 +57,24 @@ const DiabetesPetTracker = () => {
   const [events, setEvents] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [form] = Form.useForm();
   const [recentEvents, setRecentEvents] = useState([]);
 
   const cargarEventos = async () => {
     try {
       setLoading(true);
+      if (!refreshing) setRefreshing(true);
+      
+      console.log('Solicitando eventos desde:', API_URL);
       const respuesta = await fetch(`${API_URL}/api/eventos`);
       
       if (!respuesta.ok) {
-        throw new Error('Error cargando eventos');
+        throw new Error(`Error cargando eventos: ${respuesta.status} ${respuesta.statusText}`);
       }
       
       const eventos = await respuesta.json();
+      console.log(`Eventos recibidos: ${eventos.length}`);
       
       const eventosFormateados = eventos.map(evento => ({
         id: evento._id,
@@ -86,11 +93,13 @@ const DiabetesPetTracker = () => {
       message.error('Error cargando datos del servidor');
       const savedEvents = localStorage.getItem('panteraEvents');
       if (savedEvents) {
+        console.log('Cargando datos desde localStorage');
         setEvents(JSON.parse(savedEvents));
         message.warning('Usando datos guardados localmente');
       }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -130,6 +139,7 @@ const DiabetesPetTracker = () => {
     };
 
     try {
+      console.log('Enviando nuevo evento:', nuevoEvento);
       const respuesta = await fetch(`${API_URL}/api/eventos`, {
         method: 'POST',
         headers: {
@@ -139,10 +149,11 @@ const DiabetesPetTracker = () => {
       });
 
       if (!respuesta.ok) {
-        throw new Error('Error guardando evento');
+        throw new Error(`Error guardando evento: ${respuesta.status} ${respuesta.statusText}`);
       }
       
       const eventoGuardado = await respuesta.json();
+      console.log('Evento guardado exitosamente:', eventoGuardado);
       
       const eventoFormateado = {
         id: eventoGuardado._id,
@@ -158,7 +169,7 @@ const DiabetesPetTracker = () => {
       message.success('Evento guardado correctamente');
       setIsModalVisible(false);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error guardando evento:', error);
       message.error('Error guardando en el servidor');
       
       const eventoLocal = {
@@ -171,6 +182,7 @@ const DiabetesPetTracker = () => {
         timestamp: `${formattedDate}T${formattedTime}`
       };
       
+      console.log('Guardando localmente:', eventoLocal);
       setEvents(prevEvents => [...prevEvents, eventoLocal]);
       message.warning('Guardado localmente');
       setIsModalVisible(false);
@@ -179,18 +191,19 @@ const DiabetesPetTracker = () => {
 
   const deleteEvent = async (id) => {
     try {
+      console.log('Eliminando evento con ID:', id);
       const respuesta = await fetch(`${API_URL}/api/eventos/${id}`, {
         method: 'DELETE'
       });
 
       if (!respuesta.ok) {
-        throw new Error('Error eliminando evento');
+        throw new Error(`Error eliminando evento: ${respuesta.status} ${respuesta.statusText}`);
       }
       
       setEvents(prevEvents => prevEvents.filter(event => event.id !== id));
       message.success('Evento eliminado correctamente');
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error eliminando evento:', error);
       message.error('Error eliminando del servidor');
       setEvents(prevEvents => prevEvents.filter(event => event.id !== id));
       message.warning('Eliminado localmente');
@@ -305,8 +318,10 @@ const DiabetesPetTracker = () => {
             type="text" 
             style={{ color: 'white' }} 
             onClick={cargarEventos}
+            disabled={refreshing}
+            icon={refreshing ? <SyncOutlined spin /> : null}
           >
-            Actualizar
+            {refreshing ? 'Actualizando...' : 'Actualizar'}
           </Button>
         </Header>
         
@@ -392,7 +407,7 @@ const DiabetesPetTracker = () => {
                       <List.Item.Meta
                         avatar={<Tag color={color} icon={icon}>{title}</Tag>}
                         title={
-                          <Space>
+                          <Space wrap style={{width: '100%'}}>
                             {dayjs(`${event.date} ${event.time}`).format('DD/MM/YYYY HH:mm')}
                             {valueDisplay}
                           </Space>
@@ -419,6 +434,7 @@ const DiabetesPetTracker = () => {
         footer={null}
         width={isMobile ? "95%" : 520}
         style={{ top: isMobile ? 20 : 100 }}
+        destroyOnClose={true}
       >
         <Form
           form={form}
