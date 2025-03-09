@@ -369,7 +369,7 @@ const DiabetesPetTracker = () => {
                       </Tooltip>
                     );
                   } else if (event.type === 'insulin') {
-                    valueDisplay = <Tag>{event.value} unidades</Tag>;
+                    valueDisplay = <Tag>{event.value} ml</Tag>;
                   }
                   
                   return (
@@ -486,12 +486,13 @@ const DiabetesPetTracker = () => {
                 return (
                   <Form.Item
                     name="value"
-                    label="Unidades"
-                    rules={[{ required: true, message: 'Por favor ingresa las unidades de insulina' }]}
+                    label="Cantidad (ml)"
+                    rules={[{ required: true, message: 'Por favor ingresa la cantidad de insulina en ml' }]}
                   >
                     <Input 
                       type="number" 
-                      placeholder="ej. 2" 
+                      step="0.01"
+                      placeholder="ej. 0.5" 
                     />
                   </Form.Item>
                 );
