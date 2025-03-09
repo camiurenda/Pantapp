@@ -2,33 +2,23 @@
     "version": 2,
     "builds": [
       {
-        "src": "server/server.js",
-        "use": "@vercel/node"
-      },
-      {
         "src": "client/package.json",
         "use": "@vercel/static-build",
-        "config": {
-          "distDir": "build"
-        }
+        "config": { "distDir": "build" }
+      },
+      {
+        "src": "api/*.js",
+        "use": "@vercel/node"
       }
     ],
     "routes": [
       {
         "src": "/api/(.*)",
-        "dest": "/server/server.js"
-      },
-      {
-        "handle": "filesystem"
+        "dest": "/api/$1"
       },
       {
         "src": "/(.*)",
-        "dest": "/client/build/index.html"
+        "dest": "/client/$1"
       }
-    ],
-    "env": {
-      "MONGO_URI": "mongodb+srv://urendacamila:urendacamilaMongo@clustermongodb.95vstra.mongodb.net/Pantapp",
-      "NODE_ENV": "production",
-      "VERCEL": "1"
-    }
+    ]
   }
