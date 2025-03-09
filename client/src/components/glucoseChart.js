@@ -153,7 +153,7 @@ const GlucoseChart = ({ events, isMobile }) => {
             />
             <Tooltip content={<CustomTooltip />} />
             <ReferenceLine y={80} stroke="red" strokeDasharray="3 3" label="Mínimo" />
-            <ReferenceLine y={180} stroke="red" strokeDasharray="3 3" label="Máximo" />
+            <ReferenceLine y={220} stroke="red" strokeDasharray="3 3" label="Máximo" />
             <Line 
               type="monotone" 
               dataKey="valor" 

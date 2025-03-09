@@ -235,7 +235,7 @@ const DiabetesPetTracker = () => {
   const evaluateGlucoseLevel = (value) => {
     const numValue = parseFloat(value);
     if (numValue < 80) return { color: 'red', status: 'bajo' };
-    if (numValue > 180) return { color: 'red', status: 'alto' };
+    if (numValue > 220) return { color: 'red', status: 'alto' };
     return { color: 'green', status: 'normal' };
   };
 
