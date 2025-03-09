@@ -27,8 +27,10 @@ import {
   WarningOutlined,
   ExperimentOutlined,
   MedicineBoxOutlined,
-  CoffeeOutlined
+  CoffeeOutlined,
+  LineChartOutlined
 } from '@ant-design/icons';
+import GlucoseChart from './components/glucoseChart';
 import es_ES from 'antd/lib/locale/es_ES';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
@@ -336,6 +338,11 @@ const DiabetesPetTracker = () => {
                 className={isMobile ? "mobile-calendar" : ""}
               />
             </Card>
+            
+            <GlucoseChart 
+              events={events}
+              isMobile={isMobile}
+            />
             
             <Card 
               title="Eventos Recientes" 
