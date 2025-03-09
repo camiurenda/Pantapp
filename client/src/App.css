@@ -109,6 +109,22 @@
   margin-bottom: 0;
 }
 
+/* Estilo para puntos de eventos en móvil */
+.event-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 2px;
+}
+
+.event-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin: 0 2px;
+  display: inline-block;
+}
+
 /* Ocultar el encabezado del calendario en móvil para ahorrar espacio */
 .mobile-calendar .ant-picker-calendar-header {
   padding: 8px;

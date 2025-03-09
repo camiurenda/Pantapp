@@ -237,10 +237,42 @@ const DiabetesPetTracker = () => {
     return { color: 'green', status: 'normal' };
   };
 
+  // Renderizador de celda de fecha mejorado para dispositivos móviles
   const dateCellRender = (value) => {
     const dateString = value.format('YYYY-MM-DD');
     const dayEvents = events.filter(event => event.date === dateString);
     
+    if (dayEvents.length === 0) {
+      return null;
+    }
+
+    // Para móviles, mostramos solo puntos de colores sin texto
+    if (isMobile) {
+      const eventTypes = [...new Set(dayEvents.map(event => event.type))];
+      return (
+        <div className="event-dots">
+          {eventTypes.map((type) => {
+            const { color } = getEventTypeInfo(type);
+            return (
+              <span 
+                key={type} 
+                className="event-dot" 
+                style={{ 
+                  backgroundColor: color, 
+                  display: 'inline-block',
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  margin: '0 2px'
+                }} 
+              />
+            );
+          })}
+        </div>
+      );
+    }
+    
+    // Para pantallas más grandes, mantenemos el comportamiento original
     const eventCounts = dayEvents.reduce((acc, event) => {
       acc[event.type] = (acc[event.type] || 0) + 1;
       return acc;
@@ -449,37 +481,38 @@ const DiabetesPetTracker = () => {
                     name="value"
                     label="Unidades"
                     rules={[{ required: true, message: 'Por favor ingresa las unidades de insulina' }]}
-                  ><Input 
-                  type="number" 
-                  placeholder="ej. 2" 
-                />
-              </Form.Item>
-            );
-          }
-          
-          return null;
-        }}
-      </Form.Item>
+                  >
+                    <Input 
+                      type="number" 
+                      placeholder="ej. 2" 
+                    />
+                  </Form.Item>
+                );
+              }
+              
+              return null;
+            }}
+          </Form.Item>
       
-      <Form.Item
-        name="notes"
-        label="Notas (opcional)"
-      >
-        <TextArea rows={3} placeholder="Observaciones adicionales..." />
-      </Form.Item>
+          <Form.Item
+            name="notes"
+            label="Notas (opcional)"
+          >
+            <TextArea rows={3} placeholder="Observaciones adicionales..." />
+          </Form.Item>
       
-      <Form.Item className="form-buttons">
-        <Button type="default" onClick={() => setIsModalVisible(false)} style={{ marginRight: 8 }}>
-          Cancelar
-        </Button>
-        <Button type="primary" htmlType="submit">
-          Guardar
-        </Button>
-      </Form.Item>
-    </Form>
-  </Modal>
-</ConfigProvider>
-);
+          <Form.Item className="form-buttons">
+            <Button type="default" onClick={() => setIsModalVisible(false)} style={{ marginRight: 8 }}>
+              Cancelar
+            </Button>
+            <Button type="primary" htmlType="submit">
+              Guardar
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </ConfigProvider>
+  );
 };
 
 export default DiabetesPetTracker;
