@@ -5,130 +5,76 @@ const dotenv = require('dotenv');
 const path = require('path');
 const eventosRutas = require('./routes/events');
 
+// Configurar dotenv
 dotenv.config();
 
+// Crear la aplicación Express
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Configuración CORS para permitir solicitudes desde el frontend
+// Configuración CORS - Más permisiva para entornos de desarrollo y Vercel
 app.use(cors({
-  origin: function(origin, callback) {
-    // Permitir solicitudes sin origen (como aplicaciones móviles o curl)
-    // y desde dominios específicos (incluidos subdominios de vercel.app)
-    const allowedOrigins = [
-      'http://localhost:3000',
-      /\.vercel\.app$/
-    ];
-    
-    const originIsAllowed = !origin || allowedOrigins.some(allowedOrigin => {
-      return typeof allowedOrigin === 'string' 
-        ? allowedOrigin === origin
-        : allowedOrigin.test(origin);
-    });
-    
-    callback(null, originIsAllowed);
-  },
+  origin: '*',
+  methods: ['GET', 'POST', 'DELETE', 'UPDATE', 'PUT', 'PATCH'],
   credentials: true
 }));
 
+// Middleware para parsear JSON
 app.use(express.json());
 
-// Middleware para registrar todas las peticiones
+// Middleware para registro de solicitudes
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
+// Función para conectar a MongoDB
 const conectarDB = async () => {
   try {
-    // Si estamos en Vercel, utilizamos una base de datos en la nube (MongoDB Atlas)
-    // Se recomienda usar variables de entorno en Vercel para la URL de MongoDB
-    const mongoURI = process.env.MONGO_URI || 'mongodb+srv://user:password@cluster.mongodb.net/pantera-db';
+    // Usar la URL de MongoDB desde las variables de entorno
+    const mongoURI = process.env.MONGO_URI || 'mongodb+srv://usuario:password@cluster.mongodb.net/pantera-db';
     
-    await mongoose.connect(mongoURI);
-    console.log('Conexión a MongoDB establecida');
+    await mongoose.connect(mongoURI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    
+    console.log('✅ Conexión a MongoDB establecida');
+    return true;
   } catch (err) {
-    console.error('Error conectando a MongoDB:', err.message);
+    console.error('❌ Error conectando a MongoDB:', err.message);
     console.log('La aplicación continuará en modo local (sin persistencia de datos)');
+    return false;
   }
 };
 
-// Intentar conectar a la base de datos
+// Intentar conectar a la base de datos al iniciar, pero no esperar la conexión
 conectarDB();
-
-// Ruta principal para verificar que el servidor está funcionando
-app.get('/', (req, res) => {
-  const isVercel = process.env.VERCEL === '1';
-  
-  res.send(`
-    <html>
-      <head>
-        <title>API de Control para Pantera</title>
-        <style>
-          body { 
-            font-family: Arial, sans-serif; 
-            margin: 40px;
-            line-height: 1.6;
-          }
-          .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-          }
-          h1 { color: #1890ff; }
-          .badge {
-            display: inline-block;
-            background: #52c41a;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-size: 14px;
-          }
-          .info {
-            background: #e6f7ff;
-            border: 1px solid #91d5ff;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <h1>Servidor para el control de Pantera 🐕</h1>
-          <p><span class="badge">Funcionando</span> El servidor está ejecutándose correctamente ${isVercel ? 'en Vercel' : `en el puerto ${PORT}`}</p>
-          <p>Esta es la API que maneja los datos para la aplicación de seguimiento de diabetes de Pantera.</p>
-          <p>Estado de MongoDB: ${mongoose.connection.readyState ? 'Conectado' : 'Desconectado'}</p>
-          
-          <div class="info">
-            <p><strong>Endpoints disponibles:</strong></p>
-            <ul>
-              <li>GET /api/eventos - Obtener todos los eventos</li>
-              <li>POST /api/eventos - Crear un nuevo evento</li>
-              <li>DELETE /api/eventos/:id - Eliminar un evento</li>
-            </ul>
-          </div>
-          
-          <p>Para acceder a la aplicación web, visita la ruta principal desde un navegador.</p>
-        </div>
-      </body>
-    </html>
-  `);
-});
 
 // Rutas de la API
 app.use('/api/eventos', eventosRutas);
 
-// Manejar rutas de producción para React
+// Ruta principal para verificar que el servidor está funcionando
+app.get('/api', (req, res) => {
+  res.json({
+    message: "API de Pantera funcionando correctamente",
+    status: "online",
+    timestamp: new Date().toISOString(),
+    mongoStatus: mongoose.connection.readyState ? 'conectado' : 'desconectado'
+  });
+});
+
+// Verificar si estamos en producción
 if (process.env.NODE_ENV === 'production') {
+  // Servir archivos estáticos desde la carpeta build
   const clientBuildPath = path.resolve(__dirname, '..', 'client', 'build');
-  
   app.use(express.static(clientBuildPath));
   
+  // Para cualquier solicitud que no sea a /api, servir index.html
   app.get('*', (req, res) => {
-    res.sendFile(path.join(clientBuildPath, 'index.html'));
+    if (!req.url.startsWith('/api')) {
+      res.sendFile(path.join(clientBuildPath, 'index.html'));
+    }
   });
 }
 
@@ -143,7 +89,7 @@ if (process.env.VERCEL !== '1') {
       Estado de la base de datos: ${mongoose.connection.readyState ? '✅ Conectada' : '❌ Desconectada'}
       
       Endpoints disponibles:
-      - GET  /                 → Página de bienvenida
+      - GET  /api              → Estado de la API
       - GET  /api/eventos      → Obtener todos los eventos
       - POST /api/eventos      → Crear un nuevo evento
       - DELETE /api/eventos/:id → Eliminar un evento
@@ -152,5 +98,5 @@ if (process.env.VERCEL !== '1') {
   });
 }
 
-// Importante para Vercel: exportar el objeto app para serverless
+// Importante para Vercel: exportar la aplicación para serverless
 module.exports = app;

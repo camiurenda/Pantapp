@@ -20,7 +20,9 @@ import {
   Tooltip, 
   ConfigProvider,
   Grid,
-  message
+  message,
+  Spin,
+  Alert
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -29,7 +31,8 @@ import {
   ExperimentOutlined,
   MedicineBoxOutlined,
   CoffeeOutlined,
-  MenuOutlined
+  MenuOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import es_ES from 'antd/lib/locale/es_ES';
 import dayjs from 'dayjs';
@@ -37,7 +40,7 @@ import 'dayjs/locale/es';
 
 import './App.css';
 
-const { Header, Content } = Layout;
+const { Header, Content, Footer } = Layout;
 const { Title, Text } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
@@ -47,7 +50,15 @@ const { useBreakpoint } = Grid;
 dayjs.locale('es');
 
 // URL base de la API
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// En producción (Vercel), usamos la ruta relativa /api
+// En desarrollo, usamos la URL completa desde .env
+const isProduction = process.env.NODE_ENV === 'production';
+const API_URL = isProduction 
+  ? '/api' 
+  : (process.env.REACT_APP_API_URL || 'http://localhost:5000/api');
+
+console.log('API URL:', API_URL);
+console.log('Environment:', process.env.NODE_ENV);
 
 const DiabetesPetTracker = () => {
   // Detectar tamaño de pantalla para responsividad
@@ -57,6 +68,7 @@ const DiabetesPetTracker = () => {
   // Estado para almacenar todos los eventos
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [serverStatus, setServerStatus] = useState({ connected: false, message: 'Verificando conexión...' });
   
   // Estado para el modal de nuevo evento
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -65,11 +77,52 @@ const DiabetesPetTracker = () => {
   // Estado para la lista de eventos recientes
   const [recentEvents, setRecentEvents] = useState([]);
   
+  // Verificar estado del servidor
+  const verificarServidor = async () => {
+    try {
+      // En Vercel, simplemente verificamos si podemos acceder a la API
+      const respuesta = await fetch(`${API_URL}/eventos`, { 
+        method: 'HEAD',
+        // No usamos credenciales ya que puede causar problemas CORS en Vercel
+        credentials: 'omit',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      setServerStatus({
+        connected: respuesta.ok,
+        message: respuesta.ok ? 'Conectado al servidor' : 'Error de conexión'
+      });
+      return respuesta.ok;
+    } catch (error) {
+      console.error("Error verificando servidor:", error);
+      setServerStatus({
+        connected: false,
+        message: 'No se pudo conectar al servidor'
+      });
+      return false;
+    }
+  };
+  
   // Cargar eventos desde la API
   const cargarEventos = async () => {
     try {
       setLoading(true);
-      const respuesta = await fetch(`${API_URL}/eventos`);
+      
+      // Verificar primero si el servidor está disponible
+      const servidorDisponible = await verificarServidor();
+      if (!servidorDisponible) {
+        throw new Error('Servidor no disponible');
+      }
+      
+      const respuesta = await fetch(`${API_URL}/eventos`, {
+        // No usamos credenciales en Vercel
+        credentials: 'omit',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
       
       if (!respuesta.ok) {
         throw new Error(`Error HTTP: ${respuesta.status}`);
@@ -89,9 +142,10 @@ const DiabetesPetTracker = () => {
       }));
       
       setEvents(eventosFormateados);
+      message.success('Datos cargados correctamente');
     } catch (error) {
       console.error("Error cargando eventos:", error);
-      message.error("Error al cargar los eventos. Usando datos locales.");
+      message.warning("Usando datos almacenados localmente debido a problemas de conexión");
       
       // Fallback a localStorage si la API falla
       const savedEvents = localStorage.getItem('petDiabetesEvents');
@@ -152,12 +206,21 @@ const DiabetesPetTracker = () => {
     };
     
     try {
+      // Verificar si el servidor está disponible
+      const servidorDisponible = await verificarServidor();
+      
+      if (!servidorDisponible) {
+        throw new Error('Servidor no disponible');
+      }
+      
       const respuesta = await fetch(`${API_URL}/eventos`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
         },
-        body: JSON.stringify(nuevoEvento)
+        body: JSON.stringify(nuevoEvento),
+        credentials: 'omit'
       });
       
       if (!respuesta.ok) {
@@ -168,7 +231,7 @@ const DiabetesPetTracker = () => {
       
       // Transformar para frontend
       const eventoFormateado = {
-        id: eventoGuardado._id,
+        id: eventoGuardado._id || Date.now().toString(), // Fallback ID si no hay _id
         date: eventoGuardado.fecha,
         time: eventoGuardado.hora,
         type: eventoGuardado.tipo,
@@ -181,11 +244,11 @@ const DiabetesPetTracker = () => {
       message.success('Evento registrado correctamente');
     } catch (error) {
       console.error("Error guardando evento:", error);
-      message.error("Error al guardar el evento.");
+      message.error("Error al guardar en el servidor");
       
       // Guardar localmente si falla la API
       const eventoLocal = {
-        id: Date.now(),
+        id: Date.now().toString(),
         date: formattedDate,
         time: formattedTime,
         type: values.type,
@@ -195,7 +258,7 @@ const DiabetesPetTracker = () => {
       };
       
       setEvents([...events, eventoLocal]);
-      message.warning("Guardado localmente debido a un error de conexión.");
+      message.warning("Guardado localmente. Se sincronizará cuando el servidor esté disponible.");
     }
     
     setIsModalVisible(false);
@@ -204,8 +267,19 @@ const DiabetesPetTracker = () => {
   // Eliminar un evento
   const deleteEvent = async (id) => {
     try {
+      // Verificar si el servidor está disponible
+      const servidorDisponible = await verificarServidor();
+      
+      if (!servidorDisponible) {
+        throw new Error('Servidor no disponible');
+      }
+      
       const respuesta = await fetch(`${API_URL}/eventos/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'omit',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
       });
       
       if (!respuesta.ok) {
@@ -216,10 +290,11 @@ const DiabetesPetTracker = () => {
       message.success('Evento eliminado correctamente');
     } catch (error) {
       console.error("Error eliminando evento:", error);
-      message.error("Error al eliminar el evento.");
+      message.error("Error al eliminar del servidor");
       
       // Eliminar localmente si falla la API
       setEvents(events.filter(event => event.id !== id));
+      message.warning("Eliminado localmente.");
     }
   };
   
@@ -297,13 +372,32 @@ const DiabetesPetTracker = () => {
       <Layout className="layout">
         <Header className="header">
           <div className="logo" />
-          <Title level={isMobile ? 4 : 3} style={{ color: 'white', margin: 0 }}>
-            {isMobile ? "Tracker" : "Cuidados para pantera 🐕"}
+          <Title level={isMobile ? 4 : 3} style={{ color: 'white', margin: 0, flex: 1 }}>
+            {isMobile ? "Pantera 🐕" : "Cuidados para Pantera 🐕"}
           </Title>
+          <Button 
+            icon={<ReloadOutlined />} 
+            onClick={cargarEventos}
+            type="text"
+            style={{ color: 'white' }}
+            title="Recargar datos"
+          />
         </Header>
         
         <Content className="site-layout-content">
           <div className="container">
+            {/* Alerta de estado del servidor */}
+            {!serverStatus.connected && (
+              <Alert
+                message="Sin conexión al servidor"
+                description="Los datos se están guardando localmente y se sincronizarán cuando el servidor esté disponible."
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                closable
+              />
+            )}
+            
             {/* Leyenda y botón de agregar */}
             <div className="legend-container">
               <div className="legend-tags">
@@ -339,6 +433,11 @@ const DiabetesPetTracker = () => {
               className="recent-events-card"
               style={{ marginTop: 16 }}
               loading={loading}
+              extra={
+                <Text type="secondary">
+                  {recentEvents.length > 0 ? `${recentEvents.length} eventos` : "Sin eventos"}
+                </Text>
+              }
             >
               <List
                 itemLayout="horizontal"
@@ -396,6 +495,10 @@ const DiabetesPetTracker = () => {
             </Card>
           </div>
         </Content>
+        
+        <Footer style={{ textAlign: 'center', padding: isMobile ? '10px' : '24px' }}>
+          Cuidados para Pantera ©{new Date().getFullYear()} - Control de diabetes
+        </Footer>
       </Layout>
       
       {/* Modal para agregar evento */}
