@@ -18,7 +18,8 @@ import {
   Popconfirm, 
   Tooltip, 
   ConfigProvider,
-  Grid
+  Grid,
+  message
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -41,18 +42,59 @@ const { useBreakpoint } = Grid;
 
 dayjs.locale('es');
 
+const API_URL = process.env.NODE_ENV === 'production'
+  ? 'https://pantapp.onrender.com'
+  : 'http://localhost:5000';
+
 const DiabetesPetTracker = () => {
   const screens = useBreakpoint();
   const isMobile = !screens.md;
   
-  const [events, setEvents] = useState(() => {
-    const savedEvents = localStorage.getItem('panteraEvents');
-    return savedEvents ? JSON.parse(savedEvents) : [];
-  });
-  
+  const [events, setEvents] = useState([]);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [form] = Form.useForm();
   const [recentEvents, setRecentEvents] = useState([]);
+
+  const cargarEventos = async () => {
+    try {
+      setLoading(true);
+      const respuesta = await fetch(`${API_URL}/api/eventos`);
+      
+      if (!respuesta.ok) {
+        throw new Error('Error cargando eventos');
+      }
+      
+      const eventos = await respuesta.json();
+      
+      const eventosFormateados = eventos.map(evento => ({
+        id: evento._id,
+        date: evento.fecha,
+        time: evento.hora,
+        type: evento.tipo,
+        value: evento.valor,
+        notes: evento.notas,
+        timestamp: evento.marca_tiempo
+      }));
+      
+      setEvents(eventosFormateados);
+      message.success('Datos cargados correctamente');
+    } catch (error) {
+      console.error('Error:', error);
+      message.error('Error cargando datos del servidor');
+      const savedEvents = localStorage.getItem('panteraEvents');
+      if (savedEvents) {
+        setEvents(JSON.parse(savedEvents));
+        message.warning('Usando datos guardados localmente');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarEventos();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('panteraEvents', JSON.stringify(events));
@@ -72,26 +114,85 @@ const DiabetesPetTracker = () => {
     setIsModalVisible(true);
   };
 
-  const handleSubmit = (values) => {
+  const handleSubmit = async (values) => {
     const formattedDate = values.date.format('YYYY-MM-DD');
     const formattedTime = values.time.format('HH:mm');
     
-    const newEvent = {
-      id: Date.now().toString(),
-      date: formattedDate,
-      time: formattedTime,
-      type: values.type,
-      value: values.value !== undefined ? values.value : '',
-      notes: values.notes || '',
-      timestamp: `${formattedDate}T${formattedTime}`
+    const nuevoEvento = {
+      fecha: formattedDate,
+      hora: formattedTime,
+      tipo: values.type,
+      valor: values.value !== undefined ? values.value : '',
+      notas: values.notes || '',
+      marca_tiempo: `${formattedDate}T${formattedTime}`
     };
-    
-    setEvents([...events, newEvent]);
-    setIsModalVisible(false);
+
+    try {
+      const respuesta = await fetch(`${API_URL}/api/eventos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(nuevoEvento)
+      });
+
+      if (!respuesta.ok) {
+        throw new Error('Error guardando evento');
+      }
+      
+      const eventoGuardado = await respuesta.json();
+      
+      const eventoFormateado = {
+        id: eventoGuardado._id,
+        date: eventoGuardado.fecha,
+        time: eventoGuardado.hora,
+        type: eventoGuardado.tipo,
+        value: eventoGuardado.valor,
+        notes: eventoGuardado.notas,
+        timestamp: eventoGuardado.marca_tiempo
+      };
+
+      setEvents(prevEvents => [...prevEvents, eventoFormateado]);
+      message.success('Evento guardado correctamente');
+      setIsModalVisible(false);
+    } catch (error) {
+      console.error('Error:', error);
+      message.error('Error guardando en el servidor');
+      
+      const eventoLocal = {
+        id: Date.now().toString(),
+        date: formattedDate,
+        time: formattedTime,
+        type: values.type,
+        value: values.value,
+        notes: values.notes,
+        timestamp: `${formattedDate}T${formattedTime}`
+      };
+      
+      setEvents(prevEvents => [...prevEvents, eventoLocal]);
+      message.warning('Guardado localmente');
+      setIsModalVisible(false);
+    }
   };
 
-  const deleteEvent = (id) => {
-    setEvents(events.filter(event => event.id !== id));
+  const deleteEvent = async (id) => {
+    try {
+      const respuesta = await fetch(`${API_URL}/api/eventos/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!respuesta.ok) {
+        throw new Error('Error eliminando evento');
+      }
+      
+      setEvents(prevEvents => prevEvents.filter(event => event.id !== id));
+      message.success('Evento eliminado correctamente');
+    } catch (error) {
+      console.error('Error:', error);
+      message.error('Error eliminando del servidor');
+      setEvents(prevEvents => prevEvents.filter(event => event.id !== id));
+      message.warning('Eliminado localmente');
+    }
   };
 
   const getEventTypeInfo = (type) => {
@@ -166,6 +267,13 @@ const DiabetesPetTracker = () => {
           <Title level={isMobile ? 4 : 3} style={{ color: 'white', margin: 0, flex: 1 }}>
             {isMobile ? "Pantera 🐕" : "Cuidados para Pantera 🐕"}
           </Title>
+          <Button 
+            type="text" 
+            style={{ color: 'white' }} 
+            onClick={cargarEventos}
+          >
+            Actualizar
+          </Button>
         </Header>
         
         <Content className="site-layout-content">
@@ -188,7 +296,7 @@ const DiabetesPetTracker = () => {
               </Button>
             </div>
             
-            <Card className="calendar-card">
+            <Card className="calendar-card" loading={loading}>
               <Calendar 
                 dateCellRender={dateCellRender}
                 mode="month"
@@ -201,6 +309,7 @@ const DiabetesPetTracker = () => {
               title="Eventos Recientes" 
               className="recent-events-card"
               style={{ marginTop: 16 }}
+              loading={loading}
             >
               <List
                 itemLayout="horizontal"
@@ -340,38 +449,37 @@ const DiabetesPetTracker = () => {
                     name="value"
                     label="Unidades"
                     rules={[{ required: true, message: 'Por favor ingresa las unidades de insulina' }]}
-                  >
-                    <Input 
-                      type="number" 
-                      placeholder="ej. 2" 
-                    />
-                  </Form.Item>
-                );
-              }
-              
-              return null;
-            }}
-          </Form.Item>
+                  ><Input 
+                  type="number" 
+                  placeholder="ej. 2" 
+                />
+              </Form.Item>
+            );
+          }
           
-          <Form.Item
-            name="notes"
-            label="Notas (opcional)"
-          >
-            <TextArea rows={3} placeholder="Observaciones adicionales..." />
-          </Form.Item>
-          
-          <Form.Item className="form-buttons">
-            <Button type="default" onClick={() => setIsModalVisible(false)} style={{ marginRight: 8 }}>
-              Cancelar
-            </Button>
-            <Button type="primary" htmlType="submit">
-              Guardar
-            </Button>
-          </Form.Item>
-        </Form>
-      </Modal>
-    </ConfigProvider>
-  );
+          return null;
+        }}
+      </Form.Item>
+      
+      <Form.Item
+        name="notes"
+        label="Notas (opcional)"
+      >
+        <TextArea rows={3} placeholder="Observaciones adicionales..." />
+      </Form.Item>
+      
+      <Form.Item className="form-buttons">
+        <Button type="default" onClick={() => setIsModalVisible(false)} style={{ marginRight: 8 }}>
+          Cancelar
+        </Button>
+        <Button type="primary" htmlType="submit">
+          Guardar
+        </Button>
+      </Form.Item>
+    </Form>
+  </Modal>
+</ConfigProvider>
+);
 };
 
 export default DiabetesPetTracker;
