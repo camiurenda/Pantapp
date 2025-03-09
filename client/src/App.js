@@ -19,7 +19,8 @@ import {
   Popconfirm, 
   Tooltip, 
   ConfigProvider,
-  Grid
+  Grid,
+  message
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -45,16 +46,17 @@ const { useBreakpoint } = Grid;
 // Configurar dayjs para usar español
 dayjs.locale('es');
 
+// URL base de la API
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
 const DiabetesPetTracker = () => {
   // Detectar tamaño de pantalla para responsividad
   const screens = useBreakpoint();
   const isMobile = !screens.md;
   
   // Estado para almacenar todos los eventos
-  const [events, setEvents] = useState(() => {
-    const savedEvents = localStorage.getItem('petDiabetesEvents');
-    return savedEvents ? JSON.parse(savedEvents) : [];
-  });
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
   
   // Estado para el modal de nuevo evento
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -63,8 +65,52 @@ const DiabetesPetTracker = () => {
   // Estado para la lista de eventos recientes
   const [recentEvents, setRecentEvents] = useState([]);
   
-  // Guardar eventos en localStorage cuando cambian
+  // Cargar eventos desde la API
+  const cargarEventos = async () => {
+    try {
+      setLoading(true);
+      const respuesta = await fetch(`${API_URL}/eventos`);
+      
+      if (!respuesta.ok) {
+        throw new Error(`Error HTTP: ${respuesta.status}`);
+      }
+      
+      const datos = await respuesta.json();
+      
+      // Transformar datos para compatibilidad con el frontend
+      const eventosFormateados = datos.map(evento => ({
+        id: evento._id,
+        date: evento.fecha,
+        time: evento.hora,
+        type: evento.tipo,
+        value: evento.valor,
+        notes: evento.notas,
+        timestamp: evento.marca_tiempo
+      }));
+      
+      setEvents(eventosFormateados);
+    } catch (error) {
+      console.error("Error cargando eventos:", error);
+      message.error("Error al cargar los eventos. Usando datos locales.");
+      
+      // Fallback a localStorage si la API falla
+      const savedEvents = localStorage.getItem('petDiabetesEvents');
+      if (savedEvents) {
+        setEvents(JSON.parse(savedEvents));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Cargar datos al iniciar
   useEffect(() => {
+    cargarEventos();
+  }, []);
+  
+  // Actualizar eventos recientes cuando cambian los eventos
+  useEffect(() => {
+    // Guardar una copia en localStorage como respaldo
     localStorage.setItem('petDiabetesEvents', JSON.stringify(events));
     
     // Actualizar eventos recientes
@@ -91,24 +137,90 @@ const DiabetesPetTracker = () => {
   };
   
   // Manejar el envío del formulario
-  const handleSubmit = (values) => {
-    const newEvent = {
-      id: Date.now(),
-      date: values.date.format('YYYY-MM-DD'),
-      time: values.time.format('HH:mm'),
-      type: values.type,
-      value: values.value !== undefined ? values.value : '',
-      notes: values.notes || '',
-      timestamp: `${values.date.format('YYYY-MM-DD')}T${values.time.format('HH:mm')}`
+  const handleSubmit = async (values) => {
+    const formattedDate = values.date.format('YYYY-MM-DD');
+    const formattedTime = values.time.format('HH:mm');
+    const timestamp = `${formattedDate}T${formattedTime}`;
+    
+    const nuevoEvento = {
+      fecha: formattedDate,
+      hora: formattedTime,
+      tipo: values.type,
+      valor: values.value !== undefined ? values.value : '',
+      notas: values.notes || '',
+      marca_tiempo: timestamp
     };
     
-    setEvents([...events, newEvent]);
+    try {
+      const respuesta = await fetch(`${API_URL}/eventos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(nuevoEvento)
+      });
+      
+      if (!respuesta.ok) {
+        throw new Error(`Error HTTP: ${respuesta.status}`);
+      }
+      
+      const eventoGuardado = await respuesta.json();
+      
+      // Transformar para frontend
+      const eventoFormateado = {
+        id: eventoGuardado._id,
+        date: eventoGuardado.fecha,
+        time: eventoGuardado.hora,
+        type: eventoGuardado.tipo,
+        value: eventoGuardado.valor,
+        notes: eventoGuardado.notas,
+        timestamp: eventoGuardado.marca_tiempo
+      };
+      
+      setEvents([...events, eventoFormateado]);
+      message.success('Evento registrado correctamente');
+    } catch (error) {
+      console.error("Error guardando evento:", error);
+      message.error("Error al guardar el evento.");
+      
+      // Guardar localmente si falla la API
+      const eventoLocal = {
+        id: Date.now(),
+        date: formattedDate,
+        time: formattedTime,
+        type: values.type,
+        value: values.value !== undefined ? values.value : '',
+        notes: values.notes || '',
+        timestamp: timestamp
+      };
+      
+      setEvents([...events, eventoLocal]);
+      message.warning("Guardado localmente debido a un error de conexión.");
+    }
+    
     setIsModalVisible(false);
   };
   
   // Eliminar un evento
-  const deleteEvent = (id) => {
-    setEvents(events.filter(event => event.id !== id));
+  const deleteEvent = async (id) => {
+    try {
+      const respuesta = await fetch(`${API_URL}/eventos/${id}`, {
+        method: 'DELETE'
+      });
+      
+      if (!respuesta.ok) {
+        throw new Error(`Error HTTP: ${respuesta.status}`);
+      }
+      
+      setEvents(events.filter(event => event.id !== id));
+      message.success('Evento eliminado correctamente');
+    } catch (error) {
+      console.error("Error eliminando evento:", error);
+      message.error("Error al eliminar el evento.");
+      
+      // Eliminar localmente si falla la API
+      setEvents(events.filter(event => event.id !== id));
+    }
   };
   
   // Obtener color y título según tipo de evento
@@ -212,7 +324,7 @@ const DiabetesPetTracker = () => {
             </div>
             
             {/* Calendario */}
-            <Card className="calendar-card">
+            <Card className="calendar-card" loading={loading}>
               <Calendar 
                 dateCellRender={dateCellRender}
                 mode="month"
@@ -226,6 +338,7 @@ const DiabetesPetTracker = () => {
               title="Eventos Recientes" 
               className="recent-events-card"
               style={{ marginTop: 16 }}
+              loading={loading}
             >
               <List
                 itemLayout="horizontal"
